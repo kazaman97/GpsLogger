@@ -7,27 +7,19 @@ import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
-import android.location.LocationListener;
-import android.location.LocationManager;
-import android.location.LocationProvider;
 import android.os.Looper;
-import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
 import android.support.v4.content.ContextCompat;
-import android.support.v7.app.AppCompatActivity;
-import android.support.v7.app.AppCompatCallback;
 import android.util.Log;
 import android.widget.CompoundButton;
-import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ToggleButton;
 
 import com.google.android.gms.common.api.ApiException;
-import com.google.android.gms.common.api.GoogleApi;
 import com.google.android.gms.common.api.ResolvableApiException;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
@@ -48,9 +40,6 @@ import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 
-import java.text.DateFormat;
-import java.util.Date;
-
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback/*, CompoundButton.OnCheckedChangeListener*/ {
 
     private FusedLocationProviderClient fusedLocationClient;
@@ -59,22 +48,19 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private LocationCallback locationCallback;
     private LocationRequest locationRequest;
     private Location location;
+    private String msg;
+    private boolean sokui = false;
 
     private GoogleMap mMap;
-    private String lastUpdateTime;
     private int priority = 0;
     private Boolean requestingLocationUpdates;
     private static final int REQUEST_CHECK_SETTINGS = 0x1;
-    private TextView textView;
-    private String textLog;
 
-    // テスト用の座標
+    // マーカー用の座標
     private LatLng mydaigaku = new LatLng(39.802802, 141.137441);
+    private LatLng inobe = new LatLng(39.8002526, 141.1372295);
 
     private LatLng genzai; // サイトでいうLocation
-
-    // CompoundButton cmap = (CompoundButton)findViewById(R.id.changeMap);
-    // private ToggleButton cmap = (ToggleButton)findViewById(R.id.changeMap);
 
     // 描画内容の設定
     PolylineOptions po = new PolylineOptions();
@@ -82,6 +68,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_maps);
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
@@ -96,44 +83,59 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         locationUpdates(); // サイトで言うstartLocationUpdates()
 
-        /*
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION,}, 1000);
-        }
-        else {
-            locationStart();
-        }
-        */
         mapFragment.getMapAsync(this);
 
-
-
-        // ToggleButtonの取得
-       // cmap.setOnCheckedChangeListener(this);
     }
-
-    /*public void onCheckedChanged(CompoundButton buttonView, boolean isChecked){
-        if(isChecked) {
-            mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
-        }else {
-            mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
-        }
-    }*/
 
     private void createLocationCallback() {
         locationCallback = new LocationCallback() {
             public void onLocationResult(LocationResult locationResult) {
                 super.onLocationResult(locationResult);
 
+                if (!sokui) {
+                    msg = "測位しました";
+                    toastMake(msg);
+                    sokui = true;
+                }
+
+                ToggleButton toggleButton = (ToggleButton) findViewById(R.id.changeMap);
+
                 location = locationResult.getLastLocation();
-                lastUpdateTime = DateFormat.getTimeInstance().format(new Date());
                 genzai = new LatLng(location.getLatitude(), location.getLongitude());
-                TextView textView = (TextView)findViewById(R.id.textView1);
-                textView.setText("緯度:"+location.getLatitude()+" "+"経度:"+location.getLongitude());
+                final TextView textView = (TextView)findViewById(R.id.textView1);
+                final TextView speed = (TextView)findViewById(R.id.textView2);
+
+                textView.setText("緯度:"+String.valueOf(String.format("%.3f", location.getLatitude()))+" "
+                        +"経度:"+String.valueOf(String.format("%.3f", location.getLongitude())) +" "+"高度:"+String.valueOf(String.format("%.2f", location.getAltitude())));
+                speed.setText("速度:"+String.valueOf(String.format("%.1f", location.getSpeed()))+"m/s");
+
                 po.add(genzai);
                 mMap.addPolyline(po);
+                toggleButton.setOnCheckedChangeListener(
+                        new CompoundButton.OnCheckedChangeListener() {
+                            @Override
+                            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                                if (isChecked) {
+                                    mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
+                                    textView.setTextColor(Color.GRAY);
+                                    speed.setTextColor(Color.GRAY);
+                                    toastMake("通常地図");
+                                } else {
+                                    mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+                                    textView.setTextColor(Color.WHITE);
+                                    speed.setTextColor(Color.WHITE);
+                                    toastMake("航空地図");
+                                }
+                            }
+                        }
+                );
             }
         };
+    }
+
+    private void toastMake(String text){
+        Toast toast = Toast.makeText(this, text, Toast.LENGTH_SHORT);
+        toast.show();
     }
 
     private void createLocationRequest() {
@@ -183,37 +185,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 break;
         }
     }
-    /*
-    private void locationStart(){
-        Log.d("debag", "locationStart");
-
-        // LocationMnager インスタンス生成
-        locationManager = (LocationManager)getSystemService(LOCATION_SERVICE);
-
-        final boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
-
-        if (!gpsEnabled) {
-            // GPSを設定するように促す
-            Intent settingsIntent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-            startActivity(settingsIntent);
-            Log.d("debug", "not gpsEnable, startActivity");
-        } else {
-            Log.d("debug", "gpsEnabled");
-        }
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION,}, 1000);
-
-            Log.d("debug", "checkSelfPermission false");
-            return;
-        }
-
-        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 10, 1, this);
-    }
-    */
-
-
-
 
     private void locationUpdates() {
         // Begin by checking if the device has the necessary location settings.
@@ -288,40 +259,23 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED) {
             mMap.setMyLocationEnabled(true);
-        } else {
-            // Show rationale and request permission.
         }
-
-        // mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
-
-       /* mMap.setOnMyLocationChangeListener(new GoogleMap.OnMyLocationChangeListener() {
-            @Override
-            public void onMyLocationChange(Location location) {
-                TextView textView = (TextView)findViewById(R.id.textView1);
-
-            }
-        });*/
-
-        // LocationManager locationManager = (LocationManager)this.getSystemService(Context.LOCATION_SERVICE);
-        // Location myLocate = locationManager.getLastKnownLocation("gps");
 
         // 線色
         po.color(Color.MAGENTA);
         // 線幅
         po.width(4);
 
-        // 点を追加
-        // po.add(genzai);
-
-        // Google Mapsに追加する
-        // mMap.addPolyline(po);
-
         // CameraPosition cameraPos = new CameraPosition.Builder().target(jitku).zoom(10.0f).bearing(0).build();
+
+        msg = "測位中";
+        toastMake(msg);
 
         // マーカーセット
         mMap.addMarker(new MarkerOptions().position(mydaigaku).title("岩手県立大学"));
+        mMap.addMarker(new MarkerOptions().position(inobe).title("滝沢市IPUイノベーションセンター"));
         // 初期カメラ視点を
-        mMap.moveCamera(CameraUpdateFactory.newLatLng(mydaigaku));
+        mMap.moveCamera(CameraUpdateFactory.newLatLng(inobe));
         // mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPos));
         mMap.setTrafficEnabled(true);
 
